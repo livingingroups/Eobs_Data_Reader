@@ -20,14 +20,14 @@
 
 
 
-Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate = NULL, start_timestamp = NULL, end_timestamp = NULL, plot = TRUE){
+Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate = NULL, start_timestamp = NULL, end_timestamp = NULL, standardised_burst_duration = FALSE, plot = TRUE){
   
   suppressWarnings ({
     # Suppress dplyr summarise info
     options(dplyr.summarise.inform = FALSE)
     
     ### Automatically Load or Install Required Packages ###
-    required_packages <- c("dplyr", "tidyr", "ggplot2", "data.table", "pbapply", "cowplot", "viridis")
+    required_packages <- c("dplyr", "tidyr", "ggplot2", "data.table", "pbapply", "cowplot", "viridis", "knitr")
     
     install_and_load <- function(packages) {
       for (pkg in packages) {
@@ -199,7 +199,7 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           
           message(paste("Extracting acceleration to long format..."))
           
-          # Prepare parameters for parallel processing
+          # Prepare parameters for converting data to long-format
           params_list <- lapply(seq_len(nrow(acc)), function(i) {
             list(
               row_id = i,
@@ -351,6 +351,119 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
             burst_ids  # Return the vector of burst IDs
           }]
           
+          # Burst duration
+          # Compute burst durations
+          burst_summary <- processed_acc[, .(
+            burst_start_time = min(extrapolated_timestamp, na.rm = TRUE),
+            burst_end_time = max(extrapolated_timestamp, na.rm = TRUE),
+            burst_duration = max(extrapolated_timestamp, na.rm = TRUE) - min(extrapolated_timestamp, na.rm = TRUE),
+            sensor_type = first(sensor_type)
+          ), by = burst_id]
+          
+          # Convert burst_duration to numeric (in seconds)
+          burst_summary[, burst_duration := as.numeric(burst_duration)]
+          
+          # Merge the burst_duration column back into the main processed_acc data frame
+          processed_acc <- merge(
+            processed_acc, 
+            burst_summary[, .(burst_id, burst_duration)],  # Select only relevant columns for merging
+            by = "burst_id",
+            all.x = TRUE  # Keep all rows in processed_acc, even if no matching burst_id in burst_summary
+          )
+          
+          # Summarize burst duration statistics by sensor type
+          burst_stats <- burst_summary[, .(
+            Median = median(burst_duration, na.rm = TRUE),
+            SD = sd(burst_duration, na.rm = TRUE),
+            Min = min(burst_duration, na.rm = TRUE),
+            Max = max(burst_duration, na.rm = TRUE),
+            IQR = IQR(burst_duration, na.rm = TRUE)
+          ), by = sensor_type]
+          
+          # Print as a formatted table
+          print(kable(burst_stats, format = "markdown", 
+                      col.names = c("Sensor Type", "Median (s)", "SD (s)", "Min (s)", "Max (s)", "IQR (s)")))
+          
+          # Filter burst durations within 1.5 times the IQR (Tukey's method for outliers)
+          typical_durations <- burst_summary[, .(
+            lower_bound = quantile(burst_duration, 0.25, na.rm = TRUE) - 1.5 * IQR(burst_duration, na.rm = TRUE),
+            upper_bound = quantile(burst_duration, 0.75, na.rm = TRUE) + 1.5 * IQR(burst_duration, na.rm = TRUE),
+            median_burst_duration = median(burst_duration, na.rm = TRUE)
+          ), by = sensor_type]
+          
+          # Merge back to check burst durations against typical ranges
+          burst_summary <- merge(burst_summary, typical_durations, by = "sensor_type", all.x = TRUE)
+          
+          # Flag bursts within the typical range
+          burst_summary[, is_typical := burst_duration >= lower_bound & burst_duration <= upper_bound]
+          # Select the smallest typical median burst duration
+          smallest_typical_duration <- burst_summary[is_typical == TRUE, min(median_burst_duration, na.rm = TRUE)]
+          
+          # Standardize burst duration
+          if(standardised_burst_duration == TRUE){
+            # Print the message with the calculated value
+           message(sprintf(
+            "The lowest typical burst duration is: %.2f seconds. New burst IDs will be standardized according to this duration.",
+            smallest_typical_duration
+          ))
+          
+          standardize_bursts <- function(data, standard_duration) {
+            # Round standard_duration to 2 decimal places
+            standard_duration <- round(standard_duration, 2)
+            
+            # Ensure required columns are present
+            if (!all(c("burst_id", "burst_duration", "eobs.acceleration.sampling.frequency.per.axis", "extrapolated_timestamp") %in% names(data))) {
+              stop("The dataset must contain 'burst_id', 'burst_duration', 'eobs.acceleration.sampling.frequency.per.axis', and 'extrapolated_timestamp'.")
+            }
+            
+            # Split bursts into standardized chunks
+            standardized_data <- data[, {
+              # Calculate the total number of standardized bursts
+              n_bursts <- ceiling(unique(burst_duration) / standard_duration)
+              
+              # Validate n_bursts
+              if (length(n_bursts) != 1 || is.na(n_bursts) || n_bursts <= 0) {
+                stop(paste("Invalid value for 'n_bursts' in burst_id:", unique(burst_id), ". Check burst_duration or standard_duration."))
+              }
+              
+              # Calculate the start times for each standardized burst
+              burst_start_times <- seq(
+                from = min(extrapolated_timestamp),
+                by = standard_duration,
+                length.out = n_bursts
+              )
+              burst_end_times <- c(burst_start_times[-1], max(extrapolated_timestamp))
+              
+              # Assign each timestamp to a burst
+              burst_indices <- findInterval(extrapolated_timestamp, burst_start_times)
+              
+              # Assign standardized burst IDs
+              standardized_burst_id <- paste0(burst_id, "_", burst_indices)
+              
+              # Calculate standardized burst durations
+              standardized_burst_duration <- burst_end_times[burst_indices] - burst_start_times[burst_indices]
+              
+              # Determine if the segment matches the standard duration
+              is_standardized <- fifelse(
+                round(standardized_burst_duration, 2) == standard_duration, TRUE, FALSE
+              )
+              
+              # Return updated columns
+              .(
+                standardized_burst_id,
+                standardized_burst_duration,
+                is_standardized
+              )
+            }, by = burst_id]
+            
+            # Combine the standardized data with the original data
+            return(cbind(data, standardized_data))
+          }
+          # Apply the function to processed_acc
+          processed_acc <- standardize_bursts(processed_acc, as.numeric(smallest_typical_duration))
+          
+          }
+          
           if (plot == TRUE) {
             ########################### Summary plots #################################
             
@@ -398,18 +511,7 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
             
             #Convert back to data.table
             setDT(plot_data)
-            
-            # Compute burst durations
-            burst_summary <- processed_acc[, .(
-              burst_start_time = min(extrapolated_timestamp, na.rm = TRUE),
-              burst_end_time = max(extrapolated_timestamp, na.rm = TRUE),
-              burst_duration = max(extrapolated_timestamp, na.rm = TRUE) - min(extrapolated_timestamp, na.rm = TRUE),
-              sensor_type = first(sensor_type)
-            ), by = burst_id]
-            
-            # Convert burst_duration to numeric (in seconds)
-            burst_summary[, burst_duration := as.numeric(burst_duration)]
-            
+  
             # Define axis labels dynamically based on present axes
             axis_labels <- setNames(
               paste0("Mean Acceleration (", toupper(sub("mean_acc_", "", paste0("mean_", present_axes))), ")"),
@@ -482,8 +584,9 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
               )
             
             # Plot burst durations over time
+            # Plot burst durations over time
             p3 <- ggplot(burst_summary, aes(x = burst_start_time, y = burst_duration, color = sensor_type)) +
-              geom_point(size = 2, alpha = 0.7) +
+              geom_point(size = 1, alpha = 0.7) +
               geom_line(aes(group = sensor_type), alpha = 0.5) +  # Optionally connect points by sensor type
               labs(
                 title = "Burst Durations Over Time by Sensor Type",
@@ -498,7 +601,27 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
                 panel.grid.major = element_line(color = "grey90"),
                 panel.grid.minor = element_blank()
               ) +
-              facet_wrap(.~sensor_type, scales =  "free_y")
+              facet_wrap(.~sensor_type, scales = "free_y")
+            
+            # If standardized_burst_duration is TRUE, add standardized burst durations
+            if (standardised_burst_duration == TRUE) {
+              standardized_summary <- processed_acc[, .(
+                burst_start_time = min(extrapolated_timestamp, na.rm = TRUE),
+                standardized_burst_duration = unique(standardized_burst_duration),
+                sensor_type = first(sensor_type)
+              ), by = standardized_burst_id]
+              
+              # Overlay standardized burst durations
+              p3 <- p3 +
+                labs(
+                  title = "Burst Durations Over Time by Sensor Type (triangles = Standardised durations)") + 
+                geom_point(data = standardized_summary, 
+                           aes(x = burst_start_time, y = standardized_burst_duration, color = sensor_type), 
+                           shape = 17, size = 1, alpha = 0.5) +  # Triangle points
+                geom_line(data = standardized_summary, 
+                          aes(x = burst_start_time, y = standardized_burst_duration, group = sensor_type, color = sensor_type), 
+                          linetype = "dashed", alpha = 0.5)  # Dashed lines
+            }
             
             
             # Combine the plots vertically
@@ -550,6 +673,32 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
             
             c(static, dynamic, list(vedba))
           }, by = burst_id]
+          
+          # If standardized_burst_duration is TRUE, compute these metrics for the new standardized_burst_id
+          if (standardised_burst_duration == TRUE) {
+            message("Transforming acceleration values into units of g and computing VeDBA for standardized bursts...")
+            # Compute metrics for standardized bursts
+            processed_acc[, c(
+              paste0("standardized_", present_axes, "_static"),
+              paste0("standardized_", present_axes, "_dynamic"),
+              "standardized_VeDBA"
+            ) := {
+              # Compute static acceleration (rolling mean) for present axes using `frollmean`
+              static <- lapply(present_axes, function(axis_g) {
+                frollmean(get(paste0(axis_g, "_g")), n = rolling_mean_width, align = "center", na.rm = FALSE)
+              })
+              
+              # Compute dynamic acceleration (subtract static from raw)
+              dynamic <- Map(function(raw, static) raw - static, 
+                             lapply(present_axes, function(axis_g) get(paste0(axis_g, "_g"))), 
+                             static)
+              
+              # Compute VeDBA (Vectorial Dynamic Body Acceleration)
+              vedba <- sqrt(Reduce(`+`, lapply(dynamic, function(d) ifelse(is.na(d), NA, d^2))))
+              
+              c(static, dynamic, list(vedba))
+            }, by = standardized_burst_id]
+          }
           
           # Remove redundant variables
           rm(burst_features, present_axes, new_axis_names, burst_starts, burst_data)
@@ -603,7 +752,7 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           
           message(paste("Extracting magnetometery to long format..."))
           
-          # Prepare parameters for parallel processing
+          # Prepare parameters for converting data to long-format
           params_list <- lapply(seq_len(nrow(mag)), function(i) {
             list(
               row_id = i,
@@ -667,7 +816,6 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           # Mark duplicates in the `extrapolated_timestamp` column
           processed_mag[, duplicate_times := duplicated(extrapolated_timestamp)]
           
-          ################# Plot uninterrupted duration of each sensor type ########################
           message("Processing sampling durations and uniterupted burst lengths...")
           
           # Initialize burst_id
@@ -691,9 +839,8 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
             })
             
             burst_ids  # Return the vector of burst IDs
-            
-          }]
           
+          }]
         }
       }
     }
@@ -774,7 +921,7 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
             )
           }
           
-          # Prepare parameters for parallel processing
+          # Prepare parameters for converting data to long-format
           params_list <- lapply(seq_len(nrow(quat)), function(i) {
             list(
               row_id = i,
@@ -783,7 +930,7 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
             )
           })
           
-          # Process magnetometer data to long format
+          # Process quaternion data to long format
           processed_quat <- pblapply(params_list, process_quaternion_data)
           # Combine results into a single data.table
           processed_quat <- rbindlist(processed_quat, fill = TRUE)
@@ -800,8 +947,8 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           # Identify and dynamically handle present axes
           present_axes <- intersect(c("W", "X", "Y", "Z"), names(processed_quat))
           setcolorder(processed_quat, c(setdiff(names(processed_quat), present_axes), present_axes)) # All other columns except the present axes
-          # Rename the present axes to `mag_x`, `mag_y`, and `mag_z`
-          new_axis_names <- paste0("quat_", tolower(present_axes))  # Convert to mag_x, mag_y, mag_z
+          # Rename the present axes to 'quat_w`, `quat_x`, `quat_y`, and `quat_z`
+          new_axis_names <- paste0("quat_", tolower(present_axes))  # Convert to 'quat_w`, `quat_x`, `quat_y`, and `quat_z`
           setnames(processed_quat, old = present_axes, new = new_axis_names)
           
           message("Converting quaternions...")
@@ -856,7 +1003,6 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           # Mark duplicates in the `extrapolated_timestamp` column
           processed_quat[, duplicate_times := duplicated(extrapolated_timestamp)]
           
-          ################# Plot uninterrupted duration of each sensor type ########################
           message("Processing sampling durations and uniterupted burst lengths...")
           
           # Initialize burst_id
@@ -977,9 +1123,10 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
 
 # E.g., 
 
-#Animal.1 = Eobs_Data_Reader(df = df, 
-                        # rolling_mean_width = 40, 
-                        # standardised_freq_rate = NULL, 
-                        # start_timestamp = NULL,
-                        # end_timestamp = NULL,
-                        # plot = TRUE)
+Animal.1 = Eobs_Data_Reader(df = df, 
+                         rolling_mean_width = 40, 
+                         standardised_freq_rate = 10, 
+                         start_timestamp = NULL,
+                         end_timestamp = NULL,
+                         standardised_burst_duration = TRUE,
+                         plot = TRUE)
