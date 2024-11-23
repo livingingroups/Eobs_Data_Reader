@@ -130,7 +130,7 @@ The function relies on the following R packages. If any are not installed, the f
 **Timestamps and Durations**:
 12. **`interpolated_timestamp`**: Interpolated timestamps within bursts for uniform spacing.
 13. **`time_diff`**: Time difference (in seconds) between consecutive samples.
-14. **`duplicate_times`**: Boolean flag indicating duplicate extrapolated_timestamp values.
+14. **`duplicate_times`**: Boolean flag indicating duplicate interpolated_timestamp values.
 15. **`sensor_sequence`**: Identifier for uninterrupted sequences of the same sensor type.
 16. **`sampling_interval`**: Time interval (in seconds) between consecutive samples within uninterrupted sequences.
 17. **`burst_duration`**: Total duration of each burst (in seconds).  
@@ -162,7 +162,7 @@ The function relies on the following R packages. If any are not installed, the f
 9. **`burst_length`**: Number of data points within a burst, representing the duration of a continuous recording session.
 10. **`interpolated_timestamp`**: Interpolated timestamps within bursts for uniform spacing.
 11. **`time_diff`**: Time difference (in seconds) between consecutive samples.
-12. **`duplicate_times`**: Boolean flag indicating duplicate extrapolated_timestamp values.
+12. **`duplicate_times`**: Boolean flag indicating duplicate interpolated_timestamp values.
 13. **`burst_id`**: Unique identifier for each burst, based on time and sensor continuity.
 14. **`quat_w`, `quat_x`, `quat_y`, `quat_z`**: Quaternion data components, normalized.
 
