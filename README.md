@@ -127,7 +127,7 @@ The function relies on the following R packages. If any are not installed, the f
 8. **`eobs.acceleration.sampling.frequency.per.axis`**: Sampling rate (in Hz) for acceleration data. If standardized_freq_rate is set, this column will reflect that value.
 **Processed Acceleration Data**:
 10. **`acc_x`, `acc_y`, `acc_z`**: Raw (digital analogue) acceleration values for the respective axes after long-format conversion.
-**Timestamps and Durations**:
+<br> **Timestamps and Durations**:
 12. **`interpolated_timestamp`**: Interpolated timestamps within bursts for uniform spacing.
 13. **`time_diff`**: Time difference (in seconds) between consecutive samples.
 14. **`duplicate_times`**: Boolean flag indicating duplicate extrapolated_timestamp values.
