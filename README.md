@@ -122,7 +122,7 @@ The function relies on the following R packages. If any are not installed, the f
 4. **`individual.taxon.canonical.name`**: Scientific name of the tracked species.
 5. **`tag.local.identifier`**: Identifier for the tracking tag.
 6. **`individual.local.identifier`**: Identifier for the tracked individual.
-
+br()
 **Sensor-Specific Metadata**:
 7. **`eobs.acceleration.axes`**: Axes recorded for acceleration (e.g., XYZ or subsets like XZ).
 8. **`eobs.acceleration.sampling.frequency.per.axis`**: Sampling rate (in Hz) for acceleration data. If standardized_freq_rate is set, this column will reflect that value.
