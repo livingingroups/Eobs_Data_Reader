@@ -122,12 +122,13 @@ The function relies on the following R packages. If any are not installed, the f
 4. **`individual.taxon.canonical.name`**: Scientific name of the tracked species.
 5. **`tag.local.identifier`**: Identifier for the tracking tag.
 6. **`individual.local.identifier`**: Identifier for the tracked individual.
+<br>
 **Sensor-Specific Metadata**:
 7. **`eobs.acceleration.axes`**: Axes recorded for acceleration (e.g., XYZ or subsets like XZ).
 8. **`eobs.acceleration.sampling.frequency.per.axis`**: Sampling rate (in Hz) for acceleration data. If standardized_freq_rate is set, this column will reflect that value.
+<br>
 **Processed Acceleration Data**:
 10. **`acc_x`, `acc_y`, `acc_z`**: Raw (digital analogue) acceleration values for the respective axes after long-format conversion.
-<br>
 <br>
 **Timestamps and Durations**:
 12. **`interpolated_timestamp`**: Interpolated timestamps within bursts for uniform spacing.
@@ -137,22 +138,18 @@ The function relies on the following R packages. If any are not installed, the f
 16. **`sampling_interval`**: Time interval (in seconds) between consecutive samples within uninterrupted sequences.
 17. **`burst_duration`**: Total duration of each burst (in seconds).
 <br>
-<br>
 **Standardized Burst Data** (if `standardise_burst_duration = TRUE`):
 18. **`standardized_burst_id`**: Unique identifier for standardized bursts, subdividing original bursts into smaller, uniform durations.
 19. **`standardized_burst_duration`**: Duration (in seconds) of each standardized burst, typically equal to the standardized duration unless it's a tail-end segment.
 20. **`is_standardized`**: Boolean flag indicating whether the segment matches the standardized duration (TRUE) or is shorter (e.g., tail-end bursts).
 <br>
-<br>
 **Transformed Acceleration Data**:
 21. **`acc_x_g`, `acc_y_g`, `acc_z_g`**: Acceleration values (raw) converted to g units, where 1 g ≈ 9.81 m/s².
-<br>
 <br>
 **Static and Dynamic Acceleration (per burst_id)**
 22.	**`acc_x_static`, `acc_y_static`, `acc_z_static`**: Rolling mean (static component) of acceleration for each axis.
 23.	**`acc_x_dynamic`, `acc_y_dynamic`, `acc_z_dynamic`**: Dynamic component of acceleration (raw - static) for each axis.
 24.	**`VeDBA`**: Vectorial Dynamic Body Acceleration, computed as the Euclidean norm of dynamic acceleration values (indicative of movement intensity).
-<br>
 <br>
 **Standardized Metrics (if standardised_burst_duration = TRUE)**
 25.	**`standardized_acc_x_static`, `standardized_acc_y_static`, `standardized_acc_z_static`**: Static acceleration components for standardized bursts.
