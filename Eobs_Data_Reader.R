@@ -20,7 +20,7 @@
 
 
 
-Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate = NULL, start_timestamp = NULL, end_timestamp = NULL, standardised_burst_duration = FALSE, plot = TRUE){
+Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate = NULL, standardised_burst_duration = FALSE, start_timestamp = NULL, end_timestamp = NULL, plot = TRUE){
   
   suppressWarnings ({
     # Suppress dplyr summarise info
@@ -249,7 +249,7 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           ###############################
           message("Extrapolating within burst timestamps...")
           # Extrapolate timestamps within each burst using row_id
-          processed_acc[, extrapolated_timestamp := timestamp]  # Start with the original timestamp
+          processed_acc[, interpolated_timestamp := timestamp]  # Start with the original timestamp
           
           # Add time increment based on the sampling frequency
           processed_acc[, time_increment := 1 / eobs.acceleration.sampling.frequency.per.axis, by = row_id]
@@ -267,9 +267,9 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           # Initialize progress counter
           total_rows <- length(unique(processed_acc$row_id))
           progress_step <- floor(total_rows / 100)  # Update every 1% of progress
-          message("Adjusting extrapolated timestamps...")
+          message("Adjusting interpolated timestamps...")
           
-          processed_acc[, extrapolated_timestamp := {
+          processed_acc[, interpolated_timestamp := {
             # Use a static counter to track progress
             if (.GRP %% progress_step == 0) {
               message(paste0("Progress: ", round(.GRP / total_rows * 100), "%"))
@@ -302,10 +302,10 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           processed_acc[, c("time_increment", "burst_start", "next_burst_start", "next_sensor_type") := NULL]
           
           # Add a time difference column (not grouped by row_id)
-          processed_acc[, time_diff := c(NA, diff(extrapolated_timestamp))]
+          processed_acc[, time_diff := c(NA, diff(interpolated_timestamp))]
           
-          # Mark duplicates in the `extrapolated_timestamp` column
-          processed_acc[, duplicate_times := duplicated(extrapolated_timestamp)]
+          # Mark duplicates in the `interpolated_timestamp` column
+          processed_acc[, duplicate_times := duplicated(interpolated_timestamp)]
           
           ################# Plot uninterrupted duration of each sensor type ########################
           message("Processing sampling durations and uniterupted burst lengths...")
@@ -354,9 +354,9 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           # Burst duration
           # Compute burst durations
           burst_summary <- processed_acc[, .(
-            burst_start_time = min(extrapolated_timestamp, na.rm = TRUE),
-            burst_end_time = max(extrapolated_timestamp, na.rm = TRUE),
-            burst_duration = max(extrapolated_timestamp, na.rm = TRUE) - min(extrapolated_timestamp, na.rm = TRUE),
+            burst_start_time = min(interpolated_timestamp, na.rm = TRUE),
+            burst_end_time = max(interpolated_timestamp, na.rm = TRUE),
+            burst_duration = max(interpolated_timestamp, na.rm = TRUE) - min(interpolated_timestamp, na.rm = TRUE),
             sensor_type = first(sensor_type)
           ), by = burst_id]
           
@@ -412,8 +412,8 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
             standard_duration <- round(standard_duration, 2)
             
             # Ensure required columns are present
-            if (!all(c("burst_id", "burst_duration", "eobs.acceleration.sampling.frequency.per.axis", "extrapolated_timestamp") %in% names(data))) {
-              stop("The dataset must contain 'burst_id', 'burst_duration', 'eobs.acceleration.sampling.frequency.per.axis', and 'extrapolated_timestamp'.")
+            if (!all(c("burst_id", "burst_duration", "eobs.acceleration.sampling.frequency.per.axis", "interpolated_timestamp") %in% names(data))) {
+              stop("The dataset must contain 'burst_id', 'burst_duration', 'eobs.acceleration.sampling.frequency.per.axis', and 'interpolated_timestamp'.")
             }
             
             # Split bursts into standardized chunks
@@ -428,14 +428,14 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
               
               # Calculate the start times for each standardized burst
               burst_start_times <- seq(
-                from = min(extrapolated_timestamp),
+                from = min(interpolated_timestamp),
                 by = standard_duration,
                 length.out = n_bursts
               )
-              burst_end_times <- c(burst_start_times[-1], max(extrapolated_timestamp))
+              burst_end_times <- c(burst_start_times[-1], max(interpolated_timestamp))
               
               # Assign each timestamp to a burst
-              burst_indices <- findInterval(extrapolated_timestamp, burst_start_times)
+              burst_indices <- findInterval(interpolated_timestamp, burst_start_times)
               
               # Assign standardized burst IDs
               standardized_burst_id <- paste0(burst_id, "_", burst_indices)
@@ -456,6 +456,7 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
               )
             }, by = burst_id]
             
+            standardized_data[, c("burst_id") := NULL]
             # Combine the standardized data with the original data
             return(cbind(data, standardized_data))
           }
@@ -532,7 +533,7 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
               theme_minimal()
             
             # Plot sampling intervals
-            p1 <- ggplot(burst_data, aes(x = extrapolated_timestamp, y = sampling_interval, colour = sensor_type)) +
+            p1 <- ggplot(burst_data, aes(x = interpolated_timestamp, y = sampling_interval, colour = sensor_type)) +
               geom_point(alpha = 0.4) +
               labs(
                 title = "Sampling Intervals Within Uninterrupted Sensor Sequences",
@@ -606,7 +607,7 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
             # If standardized_burst_duration is TRUE, add standardized burst durations
             if (standardised_burst_duration == TRUE) {
               standardized_summary <- processed_acc[, .(
-                burst_start_time = min(extrapolated_timestamp, na.rm = TRUE),
+                burst_start_time = min(interpolated_timestamp, na.rm = TRUE),
                 standardized_burst_duration = unique(standardized_burst_duration),
                 sensor_type = first(sensor_type)
               ), by = standardized_burst_id]
@@ -698,6 +699,7 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
               
               c(static, dynamic, list(vedba))
             }, by = standardized_burst_id]
+            
           }
           
           # Remove redundant variables
@@ -788,7 +790,7 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           ###############################
           message("Extrapolating within burst timestamps...")
           # Extrapolate timestamps within each burst using row_id
-          processed_mag[, extrapolated_timestamp := timestamp]  # Start with the original timestamp
+          processed_mag[, interpolated_timestamp := timestamp]  # Start with the original timestamp
           
           # Add time increment based on the sampling frequency
           processed_mag[, time_increment := 1 / mag.magnetic.field.sampling.frequency.per.axis, by = row_id]
@@ -796,9 +798,9 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           # Initialize progress counter
           total_rows <- length(unique(processed_mag$row_id))
           progress_step <- floor(total_rows / 100)  # Update every 1% of progress
-          message("Adjusting extrapolated timestamps...")
+          message("Adjusting interpolated timestamps...")
           
-          processed_mag[, extrapolated_timestamp := {
+          processed_mag[, interpolated_timestamp := {
             # Use a static counter to track progress
             if (.GRP %% progress_step == 0) {
               message(paste0("Progress: ", round(.GRP / total_rows * 100), "%"))
@@ -811,10 +813,10 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           processed_mag[, c("time_increment") := NULL]
           
           # Add a time difference column (not grouped by row_id)
-          processed_mag[, time_diff := c(NA, diff(extrapolated_timestamp))]
+          processed_mag[, time_diff := c(NA, diff(interpolated_timestamp))]
           
-          # Mark duplicates in the `extrapolated_timestamp` column
-          processed_mag[, duplicate_times := duplicated(extrapolated_timestamp)]
+          # Mark duplicates in the `interpolated_timestamp` column
+          processed_mag[, duplicate_times := duplicated(interpolated_timestamp)]
           
           message("Processing sampling durations and uniterupted burst lengths...")
           
@@ -975,7 +977,7 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           
           message("Extrapolating within burst timestamps...")
           # Extrapolate timestamps within each burst using row_id
-          processed_quat[, extrapolated_timestamp := timestamp]  # Start with the original timestamp
+          processed_quat[, interpolated_timestamp := timestamp]  # Start with the original timestamp
           
           # Add time increment based on the sampling frequency
           processed_quat[, time_increment := 1 / orientation.quaternions.sampling.frequency, by = row_id]
@@ -983,9 +985,9 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           # Initialize progress counter
           total_rows <- length(unique(processed_quat$row_id))
           progress_step <- floor(total_rows / 100)  # Update every 1% of progress
-          message("Adjusting extrapolated timestamps...")
+          message("Adjusting interpolated timestamps...")
           
-          processed_quat[, extrapolated_timestamp := {
+          processed_quat[, interpolated_timestamp := {
             # Use a static counter to track progress
             if (.GRP %% progress_step == 0) {
               message(paste0("Progress: ", round(.GRP / total_rows * 100), "%"))
@@ -998,10 +1000,10 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           processed_quat[, c("time_increment") := NULL]
           
           # Add a time difference column (not grouped by row_id)
-          processed_quat[, time_diff := c(NA, diff(extrapolated_timestamp))]
+          processed_quat[, time_diff := c(NA, diff(interpolated_timestamp))]
           
-          # Mark duplicates in the `extrapolated_timestamp` column
-          processed_quat[, duplicate_times := duplicated(extrapolated_timestamp)]
+          # Mark duplicates in the `interpolated_timestamp` column
+          processed_quat[, duplicate_times := duplicated(interpolated_timestamp)]
           
           message("Processing sampling durations and uniterupted burst lengths...")
           
@@ -1047,7 +1049,7 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
     if (processed_acc_exists && processed_mag_exists && processed_quat_exists) {
       # Case 1: All three data.tables exist
       if (nrow(processed_mag) == nrow(processed_quat) &&
-          all(processed_mag$extrapolated_timestamp == processed_quat$extrapolated_timestamp)) {
+          all(processed_mag$interpolated_timestamp == processed_quat$interpolated_timestamp)) {
         # processed_mag and processed_quat have matching row numbers and timestamps
         message("Combining Magnetometer and Quaternion data. Acceleration & Orientation data saved in list...")
         combined_data <- cbind(
@@ -1084,7 +1086,7 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
     } else if (processed_mag_exists && processed_quat_exists) {
       # Case 4: Only Magnetometer and Quaternion data exist
       if (nrow(processed_mag) == nrow(processed_quat) &&
-          all(processed_mag$extrapolated_timestamp == processed_quat$extrapolated_timestamp)) {
+          all(processed_mag$interpolated_timestamp == processed_quat$interpolated_timestamp)) {
         # processed_mag and processed_quat have matching row numbers and timestamps
         message("No Acceleration data. Combining Magnetometer and Quaternion data into a single data frame...")
         combined_data <- cbind(
@@ -1123,10 +1125,10 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
 
 # E.g., 
 
-Animal.1 = Eobs_Data_Reader(df = df, 
-                         rolling_mean_width = 40, 
-                         standardised_freq_rate = 10, 
-                         start_timestamp = NULL,
-                         end_timestamp = NULL,
-                         standardised_burst_duration = TRUE,
-                         plot = TRUE)
+#Animal.1 = Eobs_Data_Reader(df = df, 
+                         #rolling_mean_width = 40, 
+                         #standardised_freq_rate = NULL, 
+                         #standardised_burst_duration = TRUE,
+                         #start_timestamp = NULL,
+                         #end_timestamp = NULL,
+                         #plot = TRUE)
