@@ -89,7 +89,7 @@ The output dynamically adjusts based on available data types:
      data = df,
      rolling_mean_width = 40, # If 20 Hz frequency, this corresponds to 2 s running mean
      standardised_freq_rate = 20,
-  standardised_burst_duration = TRUE,
+     standardised_burst_duration = TRUE,
      start_timestamp = "2024-05-01 00:00:00",
      end_timestamp = "2024-06-01 23:59:59",
      plot = TRUE
