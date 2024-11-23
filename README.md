@@ -42,7 +42,7 @@ The `Eobs_Data_Reader` function is an R-based tool designed to automate the pre-
 
 #### Orientation Data (Quaternions):
 
-- Converts quaternions (if 20 Hz Orientation data is present) into mathematically meaningful components (W, X, Y, Z) for downstream analysis.
+- Converts quaternions (if 20 Hz Orientation data is present) into mathematically meaningful normalised components (W, X, Y, Z) for downstream analysis.
 
 #### Magnetometry Data:
 
@@ -94,6 +94,7 @@ The output dynamically adjusts based on available data types:
   standardised_burst_duration = TRUE,
      plot = TRUE
    )
+
    ```
 
 ### Required R Packages
