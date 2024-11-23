@@ -89,7 +89,7 @@ The output dynamically adjusts based on available data types:
      data = df,
      rolling_mean_width = 40, # If 20 Hz frequency, this corresponds to 2 s running mean
      standardised_freq_rate = 20,
-  standardised_burst_duration = TRUE,
+     standardised_burst_duration = TRUE,
      start_timestamp = "2024-05-01 00:00:00",
      end_timestamp = "2024-06-01 23:59:59",
      plot = TRUE
@@ -121,54 +121,45 @@ The function relies on the following R packages. If any are not installed, the f
 3. **`timestamp`**: Original timestamp for each sample, as provided in the raw dataset.
 4. **`individual.taxon.canonical.name`**: Scientific name of the tracked species.
 5. **`tag.local.identifier`**: Identifier for the tracking tag.
-6. **`individual.local.identifier`**: Identifier for the tracked individual.
-
+6. **`individual.local.identifier`**: Identifier for the tracked individual.  
 **Sensor-Specific Metadata**:
 7. **`eobs.acceleration.axes`**: Axes recorded for acceleration (e.g., XYZ or subsets like XZ).
-8. **`eobs.acceleration.sampling.frequency.per.axis`**: Sampling rate (in Hz) for acceleration data. If standardized_freq_rate is set, this column will reflect that value.
-
+8. **`eobs.acceleration.sampling.frequency.per.axis`**: Sampling rate (in Hz) for acceleration data. If standardized_freq_rate is set, this column will reflect that value.  
 **Processed Acceleration Data**:
-10. **`acc_x`, `acc_y`, `acc_z`**: Raw (digital analogue) acceleration values for the respective axes after long-format conversion.
-
+10. **`acc_x`, `acc_y`, `acc_z`**: Raw (digital analogue) acceleration values for the respective axes after long-format conversion.  
 **Timestamps and Durations**:
 12. **`interpolated_timestamp`**: Interpolated timestamps within bursts for uniform spacing.
 13. **`time_diff`**: Time difference (in seconds) between consecutive samples.
 14. **`duplicate_times`**: Boolean flag indicating duplicate extrapolated_timestamp values.
 15. **`sensor_sequence`**: Identifier for uninterrupted sequences of the same sensor type.
 16. **`sampling_interval`**: Time interval (in seconds) between consecutive samples within uninterrupted sequences.
-17. **`burst_duration`**: Total duration of each burst (in seconds).
-
+17. **`burst_duration`**: Total duration of each burst (in seconds).  
 **Standardized Burst Data** (if `standardise_burst_duration = TRUE`):
 18. **`standardized_burst_id`**: Unique identifier for standardized bursts, subdividing original bursts into smaller, uniform durations.
 19. **`standardized_burst_duration`**: Duration (in seconds) of each standardized burst, typically equal to the standardized duration unless it's a tail-end segment.
-20. **`is_standardized`**: Boolean flag indicating whether the segment matches the standardized duration (TRUE) or is shorter (e.g., tail-end bursts).
-
+20. **`is_standardized`**: Boolean flag indicating whether the segment matches the standardized duration (TRUE) or is shorter (e.g., tail-end bursts).  
 **Transformed Acceleration Data**:
-21. **`acc_x_g`, `acc_y_g`, `acc_z_g`**: Acceleration values (raw) converted to g units, where 1 g ≈ 9.81 m/s².
-
+21. **`acc_x_g`, `acc_y_g`, `acc_z_g`**: Acceleration values (raw) converted to g units, where 1 g ≈ 9.81 m/s².  
 **Static and Dynamic Acceleration (per burst_id)**
 22.	**`acc_x_static`, `acc_y_static`, `acc_z_static`**: Rolling mean (static component) of acceleration for each axis.
 23.	**`acc_x_dynamic`, `acc_y_dynamic`, `acc_z_dynamic`**: Dynamic component of acceleration (raw - static) for each axis.
-24.	**`VeDBA`**: Vectorial Dynamic Body Acceleration, computed as the Euclidean norm of dynamic acceleration values (indicative of movement intensity).
-
+24.	**`VeDBA`**: Vectorial Dynamic Body Acceleration, computed as the Euclidean norm of dynamic acceleration values (indicative of movement intensity).  
 **Standardized Metrics (if standardised_burst_duration = TRUE)**
 25.	**`standardized_acc_x_static`, `standardized_acc_y_static`, `standardized_acc_z_static`**: Static acceleration components for standardized bursts.
 26.	**`standardized_acc_x_dynamic`, `standardized_acc_y_dynamic`, `standardized_acc_z_dynamic`**: Dynamic acceleration components for standardized bursts.
 27.	**`standardized_VeDBA`**: VeDBA calculated for each standardized burst.
-
 ---
 
 #### **Magnetometer/Quaternion Data Output**
-
 1. **`row_id`**: Row index from the input data.
 2. **`timestamp`**: Original timestamps.
-3. ** `individual.taxon.canonical.name`**: Taxonomic name of the species associated with the data.
-4. ** `tag.local.identifier`**: Identifier for the individual tag used to collect the data, typically unique within a dataset.
-5. ** `individual.local.identifier`**: Identifier for the individual animal associated with the tag, used to distinguish between animals in the dataset.
-6. ** `eobs.magnetometery.axes`**: Indicates the axes (X, Y, Z) recorded for magnetometry data. Always set to "XYZ" in this dataset.
-7. ** `mag.magnetic.field.sampling.frequency.per.axis`**: Sampling frequency (in Hz) of the magnetometry sensor, indicating how frequently data points are recorded per axis.
+3. **`individual.taxon.canonical.name`**: Taxonomic name of the species associated with the data.
+4. **`tag.local.identifier`**: Identifier for the individual tag used to collect the data, typically unique within a dataset.
+5. **`individual.local.identifier`**: Identifier for the individual animal associated with the tag, used to distinguish between animals in the dataset.
+6. **`eobs.magnetometery.axes`**: Indicates the axes (X, Y, Z) recorded for magnetometry data. Always set to "XYZ" in this dataset.
+7. **`mag.magnetic.field.sampling.frequency.per.axis`**: Sampling frequency (in Hz) of the magnetometry sensor, indicating how frequently data points are recorded per axis.
 8. **`mag_x`, `mag_y`, `mag_z`**: Magnetic field data (XYZ axes).
-9. ** `burst_length`**: Number of data points within a burst, representing the duration of a continuous recording session.
+9. **`burst_length`**: Number of data points within a burst, representing the duration of a continuous recording session.
 10. **`interpolated_timestamp`**: Interpolated timestamps within bursts for uniform spacing.
 11. **`time_diff`**: Time difference (in seconds) between consecutive samples.
 12. **`duplicate_times`**: Boolean flag indicating duplicate extrapolated_timestamp values.
@@ -187,5 +178,3 @@ For questions, bug reports, suggestions, or contributions, please contact:
 - Richard Gunner
 - Email: rgunner@ab.mpg.de
 - GitHub: [Richard6195](https://github.com/Richard6195)
-
-
