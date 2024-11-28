@@ -402,67 +402,73 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           # Standardize burst duration
           if(standardised_burst_duration == TRUE){
             # Print the message with the calculated value
-           message(sprintf(
-            "The lowest typical burst duration is: %.2f seconds. New burst IDs will be standardized according to this duration.",
-            smallest_typical_duration
-          ))
-          
-          standardize_bursts <- function(data, standard_duration) {
-            # Round standard_duration to 2 decimal places
-            standard_duration <- round(standard_duration, 2)
+            message(sprintf(
+              "The lowest typical burst duration is: %.2f seconds. New burst IDs will be standardized according to this duration.",
+              smallest_typical_duration
+            ))
             
-            # Ensure required columns are present
-            if (!all(c("burst_id", "burst_duration", "eobs.acceleration.sampling.frequency.per.axis", "interpolated_timestamp") %in% names(data))) {
-              stop("The dataset must contain 'burst_id', 'burst_duration', 'eobs.acceleration.sampling.frequency.per.axis', and 'interpolated_timestamp'.")
-            }
-            
-            # Split bursts into standardized chunks
-            standardized_data <- data[, {
-              # Calculate the total number of standardized bursts
-              n_bursts <- ceiling(unique(burst_duration) / standard_duration)
+            standardize_bursts <- function(data, standard_duration) {
+              # Round standard_duration to 2 decimal places
+              standard_duration <- round(standard_duration, 2)
               
-              # Validate n_bursts
-              if (length(n_bursts) != 1 || is.na(n_bursts) || n_bursts <= 0) {
-                stop(paste("Invalid value for 'n_bursts' in burst_id:", unique(burst_id), ". Check burst_duration or standard_duration."))
+              # Ensure required columns are present
+              if (!all(c("burst_id", "burst_duration", "eobs.acceleration.sampling.frequency.per.axis", "interpolated_timestamp") %in% names(data))) {
+                stop("The dataset must contain 'burst_id', 'burst_duration', 'eobs.acceleration.sampling.frequency.per.axis', and 'interpolated_timestamp'.")
               }
               
-              # Calculate the start times for each standardized burst
-              burst_start_times <- seq(
-                from = min(interpolated_timestamp),
-                by = standard_duration,
-                length.out = n_bursts
-              )
-              burst_end_times <- c(burst_start_times[-1], max(interpolated_timestamp))
+              # Split bursts into standardized chunks
+              standardized_data <- data[, {
+                # Calculate the total number of standardized bursts
+                n_bursts <- ceiling(unique(burst_duration) / standard_duration)
+                
+                # Validate n_bursts
+                if (length(n_bursts) != 1 || is.na(n_bursts) || n_bursts <= 0) {
+                  stop(paste("Invalid value for 'n_bursts' in burst_id:", unique(burst_id), ". Check burst_duration or standard_duration."))
+                }
+                
+                # Calculate the start times for each standardized burst
+                burst_start_times <- seq(
+                  from = min(interpolated_timestamp),
+                  by = standard_duration,
+                  length.out = n_bursts
+                )
+                burst_end_times <- c(burst_start_times[-1], max(interpolated_timestamp))
+                
+                # Adjust the last burst duration if it's too short #0.15 s the threshold
+                if (tail(burst_end_times, 1) - tail(burst_start_times, 1) < 0.15) {
+                  burst_end_times[length(burst_end_times) - 1] <- tail(burst_end_times, 1)
+                  burst_end_times <- burst_end_times[-length(burst_end_times)]
+                }
+                
+                # Assign each timestamp to a burst
+                burst_indices <- findInterval(interpolated_timestamp, burst_start_times)
+                
+                # Assign standardized burst IDs
+                standardized_burst_id <- paste0(burst_id, "_", burst_indices)
+                
+                # Calculate standardized burst durations
+                standardized_burst_duration <- burst_end_times[burst_indices] - burst_start_times[burst_indices]
+                
+                # Determine if the segment matches the standard duration
+                is_standardized <- fifelse(
+                  round(standardized_burst_duration, 2) == standard_duration, TRUE, FALSE
+                )
+                
+                # Return updated columns
+                .(
+                  standardized_burst_id,
+                  standardized_burst_duration,
+                  is_standardized
+                )
+              }, by = burst_id]
               
-              # Assign each timestamp to a burst
-              burst_indices <- findInterval(interpolated_timestamp, burst_start_times)
-              
-              # Assign standardized burst IDs
-              standardized_burst_id <- paste0(burst_id, "_", burst_indices)
-              
-              # Calculate standardized burst durations
-              standardized_burst_duration <- burst_end_times[burst_indices] - burst_start_times[burst_indices]
-              
-              # Determine if the segment matches the standard duration
-              is_standardized <- fifelse(
-                round(standardized_burst_duration, 2) == standard_duration, TRUE, FALSE
-              )
-              
-              # Return updated columns
-              .(
-                standardized_burst_id,
-                standardized_burst_duration,
-                is_standardized
-              )
-            }, by = burst_id]
+              standardized_data[, c("burst_id") := NULL]
+              # Combine the standardized data with the original data
+              return(cbind(data, standardized_data))
+            }
+            # Apply the function to processed_acc
+            processed_acc <- standardize_bursts(processed_acc, as.numeric(smallest_typical_duration))
             
-            standardized_data[, c("burst_id") := NULL]
-            # Combine the standardized data with the original data
-            return(cbind(data, standardized_data))
-          }
-          # Apply the function to processed_acc
-          processed_acc <- standardize_bursts(processed_acc, as.numeric(smallest_typical_duration))
-          
           }
           
           if (plot == TRUE) {
@@ -678,6 +684,7 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           # If standardized_burst_duration is TRUE, compute these metrics for the new standardized_burst_id
           if (standardised_burst_duration == TRUE) {
             message("Transforming acceleration values into units of g and computing VeDBA for standardized bursts...")
+            
             # Compute metrics for standardized bursts
             processed_acc[, c(
               paste0("standardized_", present_axes, "_static"),
