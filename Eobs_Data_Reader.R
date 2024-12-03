@@ -256,8 +256,8 @@ Eobs_Data_Reader <- function(df, rolling_mean_width = 40, standardised_freq_rate
           
           # Get the first timestamp and sensor type of each burst and the next burst's details
           burst_starts <- processed_acc[, .(burst_start = first(timestamp), sensor_type = first(sensor_type)), by = row_id]
-          burst_starts[, next_burst_start := shift(burst_start, type = "lead")]
-          burst_starts[, next_sensor_type := shift(sensor_type, type = "lead")]
+          burst_starts[, next_burst_start := data.table::shift(burst_start, type = "lead")]
+          burst_starts[, next_sensor_type := data.table::shift(sensor_type, type = "lead")]
           # Remove sensor_type
           burst_starts[, c("sensor_type") := NULL]
           
